@@ -8,6 +8,10 @@ The whole system runs on Ubuntu inside Mininet: hosts run the real socket
 application, Open vSwitch enforces the bandwidth limit and the per-class
 queues, and a Ryu/os-ken controller decides which queue each flow goes into.
 
+> **Requirements specification:** [`docs/SRS.md`](docs/SRS.md) — IEEE 830 SRS
+> with numbered requirements and a traceability matrix mapping each one to the
+> source file that implements it and the test case that verifies it.
+
 ---
 
 ## 1. Architecture
