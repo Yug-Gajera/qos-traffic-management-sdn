@@ -23,7 +23,7 @@ import qos_proto as P
 class ClassSink(threading.Thread):
     """Receives one traffic class and accumulates its statistics."""
 
-    def __init__(self, class_name, bind_ip, stop_event):
+    def __init__(self, class_name, bind_ip, stop_event, origin=None):
         super().__init__(name="sink-" + class_name, daemon=True)
         self.class_name = class_name
         self.cfg = P.CLASSES[class_name]
@@ -47,6 +47,11 @@ class ClassSink(threading.Thread):
         self.first_rx = None
         self.last_rx = None
         self.buckets = {}          # second offset -> [packets, bytes, lat_sum]
+        # Shared time origin for the timeline. All classes must use the same
+        # one, otherwise a class that starts late (bulk) is plotted from t=0.
+        # None = this class's own first packet (single-sink use, e.g. tests).
+        # (Not self.start: that is threading.Thread's start() method.)
+        self.origin = origin
 
     def run(self):
         while not self.stop_event.is_set():
@@ -83,21 +88,24 @@ class ClassSink(threading.Thread):
                 self.jitter += (d - self.jitter) / 16.0
             self.prev_latency = latency
 
-            b = self.buckets.setdefault(int(now - self.first_rx), [0, 0, 0.0])
+            t0 = self.origin if self.origin is not None else self.first_rx
+            b = self.buckets.setdefault(int(now - t0), [0, 0, 0.0])
             b[0] += 1
             b[1] += len(data)
             b[2] += latency
 
         self.sock.close()
 
-    def stats(self):
+    def stats(self, offset=0):
+        """Run statistics. `offset` seconds are subtracted from timeline
+        times so t=0 is when the first class's traffic began."""
         n = self.packets
         expected = self.max_seq + 1 if self.max_seq >= 0 else 0
         span = (self.last_rx - self.first_rx) if n > 1 else 0.0
         mean = self.latency_sum / n if n else 0.0
         var = (self.latency_sq_sum / n - mean * mean) if n else 0.0
         timeline = [
-            {"t": t, "mbps": round(v[1] * 8 / 1e6, 4), "packets": v[0],
+            {"t": t - offset, "mbps": round(v[1] * 8 / 1e6, 4), "packets": v[0],
              "avg_latency_ms": round(v[2] / v[0] * 1000, 3)}
             for t, v in sorted(self.buckets.items())
         ]
@@ -133,7 +141,9 @@ def main():
     args = ap.parse_args()
 
     stop = threading.Event()
-    sinks = [ClassSink(name, args.bind, stop) for name in sorted(P.CLASSES)]
+    start = time.time()
+    sinks = [ClassSink(name, args.bind, stop, origin=start)
+             for name in sorted(P.CLASSES)]
     for s in sinks:
         s.start()
     print("[receiver] listening on ports %s for %.0fs"
@@ -147,8 +157,12 @@ def main():
     for s in sinks:
         s.join(timeout=2.0)
 
+    # Put t=0 at the second the first traffic arrived (the receiver starts
+    # about 1 s before the senders), keeping every class on the same clock.
+    firsts = [s.first_rx for s in sinks if s.first_rx is not None]
+    offset = int(min(firsts) - start) if firsts else 0
     report = {"label": args.label, "generated_at": time.time(),
-              "classes": {s.class_name: s.stats() for s in sinks}}
+              "classes": {s.class_name: s.stats(offset) for s in sinks}}
     for name, st in report["classes"].items():
         print("[receiver] %-6s %7.3f Mbps  loss %5.2f%%  lat %7.2f ms  jitter %5.2f ms"
               % (name, st["throughput_mbps"], st["loss_pct"],
