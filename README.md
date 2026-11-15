@@ -133,7 +133,7 @@ Run pieces separately if you prefer:
 
 ```bash
 # terminal 1
-QOS_MODE=auto QOS_EVENT_LOG=$PWD/results/controller.jsonl ryu-manager qos_controller.py
+QOS_MODE=auto QOS_EVENT_LOG=$PWD/results/controller.jsonl osken-manager qos_controller.py   # or ryu-manager on Python < 3.10
 # terminal 2
 sudo python3 topology.py --scenario dynamic --duration 30
 sudo python3 topology.py --cli          # interactive Mininet
