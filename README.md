@@ -64,6 +64,7 @@ and the queues actually matter.
 | `topology.py` | Mininet topology, OVS queue setup, experiment driver |
 | `analyze.py` | Comparison tables, Jain fairness index, `results/report.md`, plot |
 | `test_qos.py` | Self-check: wire format, class table, loopback measurement, fairness math |
+| `demo/` | Live-demo shortcuts: start the controller, play the traffic, show rules and queues |
 
 ### Application-level message format
 
@@ -139,6 +140,31 @@ sudo python3 topology.py --scenario dynamic --duration 30
 sudo python3 topology.py --cli          # interactive Mininet
 python3 analyze.py
 ```
+
+### Live demo
+
+Three terminals, all in the project folder:
+
+```bash
+# terminal 1: controller (leave running, watch for congestion events)
+./demo/controller.sh
+
+# terminal 2: network, then play the traffic at the mininet> prompt
+sudo python3 topology.py --cli
+mininet> source demo/traffic.cli
+
+# terminal 3: controller state, set_queue rules on s1, HTB queue counters
+./demo/check.sh
+```
+
+`demo/traffic.cli` starts voice and video at once and brings bulk in 15 s
+later, so the link congests mid-demo and the controller switches to qos; bulk
+stops at 60 s and the controller returns to flat. Run `./demo/check.sh` before
+and after bulk joins to show the rules change. Results land in `/tmp/rx.log`
+(`mininet> sh cat /tmp/rx.log`) about 100 s after `source`.
+
+Paste lines into the `mininet>` prompt one at a time: lines pasted together
+can get mixed up while a host command runs. `source` avoids that.
 
 ### Scenarios
 
