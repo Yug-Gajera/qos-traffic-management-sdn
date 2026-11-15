@@ -157,11 +157,22 @@ mininet> source demo/traffic.cli
 ./demo/check.sh
 ```
 
-`demo/traffic.cli` starts voice and video at once and brings bulk in 15 s
-later, so the link congests mid-demo and the controller switches to qos; bulk
-stops at 60 s and the controller returns to flat. Run `./demo/check.sh` before
-and after bulk joins to show the rules change. Results land in `/tmp/rx.log`
-(`mininet> sh cat /tmp/rx.log`) about 100 s after `source`.
+`demo/traffic.cli` holds four Mininet CLI lines. Timeline, in seconds after
+`source`:
+
+| t | What happens |
+|---|---|
+| 0 | Receiver on h4 starts; voice (h1) and video (h2) start: 3.5 Mbps, no congestion |
+| 15 | Bulk (h3) joins at 20 Mbps: the 10 Mbps link congests, the controller switches to qos |
+| 60 | Bulk stops: congestion clears, the controller switches back to flat |
+| 90 | Voice and video stop |
+| 100 | Receiver stops and writes `/tmp/rx.log` and `/tmp/demo.json` |
+
+Run `./demo/check.sh` before and after bulk joins to show the rules change.
+Read the results with `mininet> sh cat /tmp/rx.log`.
+
+The file has no comments on purpose: `source` passes each line to Mininet as
+a command, so a comment line would print `*** Unknown command`.
 
 Paste lines into the `mininet>` prompt one at a time: lines pasted together
 can get mixed up while a host command runs. `source` avoids that.
