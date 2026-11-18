@@ -33,11 +33,10 @@ def load(path):
         return json.load(fh)
 
 
-def events_for(label, results_dir):
-    path = os.path.join(results_dir, "events-%s.jsonl" % label)
-    if not os.path.exists(path):
-        return []
+def _read_jsonl(path):
     out = []
+    if not os.path.exists(path):
+        return out
     with open(path) as fh:
         for line in fh:
             line = line.strip()
@@ -47,6 +46,24 @@ def events_for(label, results_dir):
                 except ValueError:
                     pass
     return out
+
+
+def events_for(label, results_dir):
+    """Controller decisions made while scenario `label` was running.
+
+    topology.py writes scenario_start/scenario_end markers to
+    events-<label>.jsonl; the controller writes its decisions to
+    controller.jsonl (QOS_EVENT_LOG). Slice the controller log by the
+    scenario's time window, with a few seconds of tail for the clear event.
+    """
+    markers = _read_jsonl(os.path.join(results_dir, "events-%s.jsonl" % label))
+    start = next((e["t"] for e in markers if e.get("kind") == "scenario_start"), None)
+    end = next((e["t"] for e in markers if e.get("kind") == "scenario_end"), None)
+    controller = _read_jsonl(os.path.join(results_dir, "controller.jsonl"))
+    if start is None:
+        return markers + controller
+    end = (end if end is not None else float("inf")) + 5.0
+    return [e for e in controller if start <= e.get("t", 0) <= end]
 
 
 def run_table(report):

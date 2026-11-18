@@ -66,8 +66,11 @@ EVENT_LOG = os.environ.get("QOS_EVENT_LOG", "")
 
 BEST_EFFORT_QUEUE = 0
 
+# Ryu names the app base class RyuApp; os-ken renamed it OSKenApp.
+BaseApp = getattr(app_manager, "RyuApp", None) or app_manager.OSKenApp
 
-class QoSController(app_manager.RyuApp):
+
+class QoSController(BaseApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     def __init__(self, *args, **kwargs):
@@ -82,7 +85,8 @@ class QoSController(app_manager.RyuApp):
         self.last_poll_time = None
         self.utilisation = 0.0
         self.congested = False
-        self.events = []
+        # NOT self.events: the framework uses that name for its event queue.
+        self.event_log = []
         self.logger.info("QoS controller up (framework=%s mode=%s policy=%s)",
                          FW, self.mode, self.policy)
         self.monitor_thread = hub.spawn(self._monitor_loop)
@@ -92,7 +96,7 @@ class QoSController(app_manager.RyuApp):
 
     def _event(self, kind, **fields):
         rec = dict(kind=kind, t=round(time.time(), 3), **fields)
-        self.events.append(rec)
+        self.event_log.append(rec)
         self.logger.info("EVENT %s", json.dumps(rec))
         if EVENT_LOG:
             try:
@@ -284,7 +288,7 @@ class QoSController(app_manager.RyuApp):
                     "utilisation": round(self.utilisation, 3),
                     "switches": sorted(self.datapaths)}
         if cmd == "events":
-            return {"ok": True, "events": self.events[-50:]}
+            return {"ok": True, "events": self.event_log[-50:]}
         if cmd == "policy":
             if len(parts) != 2 or parts[1] not in ("qos", "flat", "auto"):
                 return {"ok": False, "error": "usage: policy qos|flat|auto"}

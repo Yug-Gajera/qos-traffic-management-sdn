@@ -64,6 +64,7 @@ and the queues actually matter.
 | `topology.py` | Mininet topology, OVS queue setup, experiment driver |
 | `analyze.py` | Comparison tables, Jain fairness index, `results/report.md`, plot |
 | `test_qos.py` | Self-check: wire format, class table, loopback measurement, fairness math |
+| `demo/` | Live-demo shortcuts: start the controller, play the traffic, show rules and queues |
 
 ### Application-level message format
 
@@ -133,12 +134,48 @@ Run pieces separately if you prefer:
 
 ```bash
 # terminal 1
-QOS_MODE=auto QOS_EVENT_LOG=$PWD/results/controller.jsonl ryu-manager qos_controller.py
+QOS_MODE=auto QOS_EVENT_LOG=$PWD/results/controller.jsonl osken-manager qos_controller.py   # or ryu-manager on Python < 3.10
 # terminal 2
 sudo python3 topology.py --scenario dynamic --duration 30
 sudo python3 topology.py --cli          # interactive Mininet
 python3 analyze.py
 ```
+
+### Live demo
+
+Three terminals, all in the project folder:
+
+```bash
+# terminal 1: controller (leave running, watch for congestion events)
+./demo/controller.sh
+
+# terminal 2: network, then play the traffic at the mininet> prompt
+sudo python3 topology.py --cli
+mininet> source demo/traffic.cli
+
+# terminal 3: controller state, set_queue rules on s1, HTB queue counters
+./demo/check.sh
+```
+
+`demo/traffic.cli` holds four Mininet CLI lines. Timeline, in seconds after
+`source`:
+
+| t | What happens |
+|---|---|
+| 0 | Receiver on h4 starts; voice (h1) and video (h2) start: 3.5 Mbps, no congestion |
+| 15 | Bulk (h3) joins at 20 Mbps: the 10 Mbps link congests, the controller switches to qos |
+| 60 | Bulk stops: congestion clears, the controller switches back to flat |
+| 90 | Voice and video stop |
+| 100 | Receiver stops and writes `/tmp/rx.log` and `/tmp/demo.json` |
+
+Run `./demo/check.sh` before and after bulk joins to show the rules change.
+Read the results with `mininet> sh cat /tmp/rx.log`.
+
+The file has no comments on purpose: `source` passes each line to Mininet as
+a command, so a comment line would print `*** Unknown command`.
+
+Paste lines into the `mininet>` prompt one at a time: lines pasted together
+can get mixed up while a host command runs. `source` avoids that.
 
 ### Scenarios
 
